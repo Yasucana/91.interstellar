@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interstellar Trading</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #1a1a2e;
+            color: #e6e6e6;
+            margin: 0;
+            padding: 20px;
+        }
+        canvas {
+            border: 2px solid #4b5e7a;
+            background-color: #0f0f23;
+        }
+        #game-container {
+            text-align: center;
+        }
+        #info-panel {
+            margin-top: 20px;
+            background-color: #2a2a4e;
+            padding: 15px;
+            border-radius: 10px;
+            width: 300px;
+        }
+        button {
+            background-color: #4b5e7a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #5a7a9a;
+        }
+        #trade-options {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        <div id="info-panel">
+            <h2>Interstellar Trading</h2>
+            <p>Credits: <span id="credits">1000</span></p>
+            <p>Current Planet: <span id="current-planet">Earth</span></p>
+            <p>Inventory: <span id="inventory">None</span></p>
+            <p>Day: <span id="day">1</span></p>
+            <div id="trade-options"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let credits = 1000;
+        let day = 1;
+        let currentPlanet = 'Earth';
+        let inventory = [];
+
+        // Planets and economy
+        const planets = [
+            { name: 'Earth', x: 100, y: 100, goods: { Food: { price: 10, stock: 100 }, Tech: { price: 50, stock: 50 } } },
+            { name: 'Mars', x: 300, y: 150, goods: { Ore: { price: 20, stock: 80 }, Tech: { price: 60, stock: 30 } } },
+            { name: 'Jupiter', x: 500, y: 300, goods: { Gas: { price: 30, stock: 60 }, Food: { price: 15, stock: 40 } } }
+        ];
+
+        // Routes with travel times
+        const routes = {
+            'Earth-Mars': 2,
+            'Mars-Earth': 2,
+            'Earth-Jupiter': 5,
+            'Jupiter-Earth': 5,
+            'Mars-Jupiter': 3,
+            'Jupiter-Mars': 3
+        };
+
+        // Draw game map
+        function drawMap() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw planets
+            planets.forEach(planet => {
+                ctx.beginPath();
+                ctx.arc(planet.x, planet.y, 10, 0, Math.PI * 2);
+                ctx.fillStyle = planet.name === currentPlanet ? '#ffcc00' : '#4b5e7a';
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px Arial';
+                ctx.fillText(planet.name, planet.x + 15, planet.y);
+            });
+            // Draw routes
+            ctx.strokeStyle = '#4b5e7a';
+            ctx.lineWidth = 1;
+            for (let route in routes) {
+                const [start, end] = route.split('-');
+                const startPlanet = planets.find(p => p.name === start);
+                const endPlanet = planets.find(p => p.name === end);
+                ctx.beginPath();
+                ctx.moveTo(startPlanet.x, startPlanet.y);
+                ctx.lineTo(endPlanet.x, endPlanet.y);
+                ctx.stroke();
+            }
+        }
+
+        // Update UI
+        function updateUI() {
+            document.getElementById('credits').textContent = credits;
+            document.getElementById('current-planet').textContent = currentPlanet;
+            document.getElementById('inventory').textContent = inventory.length ? inventory.map(i => `${i.name} (${i.quantity})`).join(', ') : 'None';
+            document.getElementById('day').textContent = day;
+
+            // Update trade options
+            const tradeOptions = document.getElementById('trade-options');
+            tradeOptions.innerHTML = '';
+            const planet = planets.find(p => p.name === currentPlanet);
+            for (let good in planet.goods) {
+                const buyButton = document.createElement('button');
+                buyButton.textContent = `Buy ${good} ($${planet.goods[good].price})`;
+                buyButton.onclick = () => buyGood(good, planet);
+                tradeOptions.appendChild(buyButton);
+
+                const sellButton = document.createElement('button');
+                sellButton.textContent = `Sell ${good} ($${Math.floor(planet.goods[good].price * 0.8)})`;
+                sellButton.onclick = () => sellGood(good, planet);
+                tradeOptions.appendChild(sellButton);
+            }
+
+            // Travel buttons
+            planets.forEach(p => {
+                if (p.name !== currentPlanet) {
+                    const travelButton = document.createElement('button');
+                    travelButton.textContent = `Travel to ${p.name} (${routes[`${currentPlanet}-${p.name}`]} days)`;
+                    travelButton.onclick = () => travelTo(p.name);
+                    tradeOptions.appendChild(travelButton);
+                }
+            });
+        }
+
+        // Buy goods
+        function buyGood(good, planet) {
+            if (planet.goods[good].stock > 0 && credits >= planet.goods[good].price) {
+                credits -= planet.goods[good].price;
+                planet.goods[good].stock--;
+                const item = inventory.find(i => i.name === good);
+                if (item) {
+                    item.quantity++;
+                } else {
+                    inventory.push({ name: good, quantity: 1 });
+                }
+                updateUI();
+            }
+        }
+
+        // Sell goods
+        function sellGood(good, planet) {
+            const item = inventory.find(i => i.name === good);
+            if (item) {
+                credits += Math.floor(planet.goods[good].price * 0.8);
+                item.quantity--;
+                if (item.quantity === 0) {
+                    inventory = inventory.filter(i => i.name !== good);
+                }
+                planet.goods[good].stock++;
+                updateUI();
+            }
+        }
+
+        // Travel to planet
+        function travelTo(destination) {
+            const travelTime = routes[`${currentPlanet}-${destination}`];
+            day += travelTime;
+            currentPlanet = destination;
+            // Simulate market fluctuations
+            planets.forEach(p => {
+                for (let good in p.goods) {
+                    p.goods[good].price = Math.max(5, p.goods[good].price + Math.floor(Math.random() * 10 - 5));
+                    p.goods[good].stock = Math.min(100, p.goods[good].stock + Math.floor(Math.random() * 20 - 10));
+                }
+            });
+            drawMap();
+            updateUI();
+        }
+
+        // Initialize game
+        drawMap();
+        updateUI();
+    </script>
+</body>
+</html>
